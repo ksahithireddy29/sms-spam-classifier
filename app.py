@@ -7,12 +7,13 @@ from nltk.stem.porter import PorterStemmer
 
 ps = PorterStemmer()
 
-
+# SMS preprocessing
 def transform_text(text):
     text = text.lower()
     text = nltk.word_tokenize(text)
 
     y = []
+
     for i in text:
         if i.isalnum():
             y.append(i)
@@ -20,8 +21,10 @@ def transform_text(text):
     text = y[:]
     y.clear()
 
+    stop_words = set(stopwords.words('english'))
+
     for i in text:
-        if i not in stopwords.words('english') and i not in string.punctuation:
+        if i not in stop_words and i not in string.punctuation:
             y.append(i)
 
     text = y[:]
@@ -32,23 +35,43 @@ def transform_text(text):
 
     return " ".join(y)
 
-tfidf = pickle.load(open('vectorizer.pkl','rb'))
-model = pickle.load(open('model.pkl','rb'))
 
-st.title("Email/SMS Spam Classifier")
+st.title("📧 Email / SMS Spam Classifier")
 
-input_sms = st.text_area("Enter the message")
+message_type = st.radio(
+    "Select Message Type",
+    ["SMS", "Email"]
+)
 
-if st.button('Predict'):
+# Load correct model
+if message_type == "SMS":
+    tfidf = pickle.load(open('vectorizer.pkl', 'rb'))
+    model = pickle.load(open('model.pkl', 'rb'))
+else:
+    tfidf = pickle.load(open('email_vectorizer.pkl', 'rb'))
+    model = pickle.load(open('email_model.pkl', 'rb'))
 
-    # 1. preprocess
-    transformed_sms = transform_text(input_sms)
-    # 2. vectorize
-    vector_input = tfidf.transform([transformed_sms])
-    # 3. predict
-    result = model.predict(vector_input)[0]
-    # 4. Display
-    if result == 1:
-        st.header("Spam")
+input_text = st.text_area("Enter your message")
+
+if st.button("Predict"):
+
+    if message_type == "SMS":
+        processed_text = transform_text(input_text)
+        vector_input = tfidf.transform([processed_text])
+
     else:
-        st.header("Not Spam")
+        # Email model was trained on raw text
+        vector_input = tfidf.transform([input_text])
+
+    result = model.predict(vector_input)[0]
+
+    if hasattr(model, "predict_proba"):
+        confidence = max(model.predict_proba(vector_input)[0]) * 100
+
+    if result == 1:
+        st.error("🚨 Spam")
+    else:
+        st.success("✅ Not Spam")
+
+    if hasattr(model, "predict_proba"):
+        st.write(f"**Confidence:** {confidence:.2f}%")
